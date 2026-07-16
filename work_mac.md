@@ -1,3 +1,4 @@
+```
 Sub AggregateDataWithDecadaAndSilent()
     Dim srcWs As Worksheet, decWs As Worksheet, silWs As Worksheet, newWb As Workbook, newWs As Worksheet
     Dim lastRowConst As Long, lastRowDec As Long, lastRowSil As Long, i As Long, j As Long
@@ -230,3 +231,4 @@ Private Function CleanString(ByVal str As String) As String
     str = Replace(str, Chr(160), " ")
     CleanString = Trim(WorksheetFunction.Trim(str))
 End Function
+```
