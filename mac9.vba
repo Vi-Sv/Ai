@@ -190,13 +190,13 @@ Sub AggregateDataWithDecadaAndSilent()
                 endLvl1 = rowsColl.Count
                 alignRightColl.Add endLvl1 
                 
-                ' Фиксируем точную физическую строку Уровня 2 на листе
-                lvl2StartRows(idx1 & "_" & idx2) = currentSheetRow
-                
                 silKey = CleanString(CStr(decArr(j, 2)))
                 
                 ' Разворачивание Уровня 3 (Технологические карты SILENT_ENGINE)
                 If silDict.Exists(silKey) Then
+                    ' ИСПРАВЛЕНО: Фиксируем первую дочернюю строку СТРОГО перед заполнением 3-го уровня
+                    lvl2StartRows(idx1 & "_" & idx2) = currentSheetRow + 1
+                    
                     Set silRowsItems = silDict(silKey)
                     startLvl2 = rowsColl.Count + 1
                     
@@ -239,9 +239,12 @@ Sub AggregateDataWithDecadaAndSilent()
                     Next itemIdx
                     
                     lvl2Bounds.Add Array(startLvl2, endLvl2)
+                    ' ИСПРАВЛЕНО: Фиксируем последнюю дочернюю строку СТРОГО на текущей позиции трекера
                     lvl2EndRows(idx1 & "_" & idx2) = currentSheetRow
                 Else
-                    lvl2EndRows(idx1 & "_" & idx2) = currentSheetRow
+                    ' Если дочерних карт 3-го уровня нет, зануляем маркеры для безопасности Части 4
+                    lvl2StartRows(idx1 & "_" & idx2) = 0
+                    lvl2EndRows(idx1 & "_" & idx2) = 0
                 End If
             End If
         Next j
@@ -381,7 +384,7 @@ Sub AggregateDataWithDecadaAndSilent()
             ElseIf dotsCount = 1 Then
                 curKey = outArr(i, 1)
                 subStart = lvl2StartRows(curKey)
-                subEnd = lvl2EndRows(curKey) - 1
+                subEnd = lvl2EndRows(curKey)
                 
                 With newWs.Range("A" & currRow & ":M" & currRow)
                     .Font.Name = "Times New Roman"
@@ -393,12 +396,14 @@ Sub AggregateDataWithDecadaAndSilent()
                 newWs.Rows(currRow).RowHeight = 50
                 newWs.Cells(currRow, "C").NumberFormat = "#,##0.00"
                 
-                If subEnd >= subStart Then
+                ' ИСПРАВЛЕНО: Проверяем физический маркер наличия дочерних строк 3 уровня
+                If subStart > 0 And subEnd >= subStart Then
                     newWs.Cells(currRow, "D").Formula = "=SUM(D" & subStart & ":D" & subEnd & ")"
                     newWs.Cells(currRow, "E").Formula = "=SUM(E" & subStart & ":E" & subEnd & ")"
                     newWs.Cells(currRow, "H").Formula = "=SUM(H" & subStart & ":H" & subEnd & ")"
                     newWs.Cells(currRow, "L").Formula = "=IF(COUNTIF(L" & subStart & ":L" & subEnd & ",""<>Работы не начаты"")>0,""Работы начались"",""Работы не начаты"")"
                 Else
+                    ' Если технологических карт у работы нет, выводим 0 вместо битой формулы
                     newWs.Cells(currRow, "D").Value = 0
                     newWs.Cells(currRow, "E").Value = 0
                     newWs.Cells(currRow, "H").Value = 0
