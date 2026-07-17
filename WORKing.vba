@@ -48,7 +48,8 @@ Sub AggregateDataWithDecadaAndSilent()
         End If
     Next i
     If dict.Count = 0 Then GoTo SpeedupExit
-    ' 2. Загрузка DECADA
+
+' 2. Загрузка DECADA
     lastRowDec = decWs.Cells(decWs.Rows.Count, "C").End(xlUp).Row
     If lastRowDec < 2 Then lastRowDec = 2
     decArr = decWs.Range("C1:K" & lastRowDec).Value
@@ -93,13 +94,14 @@ Sub AggregateDataWithDecadaAndSilent()
             )
         End If
     Next i
-    ' 5. Переменные структуры и иерархии (13 колонок в памяти под финальную структуру A:M)
+
+' 5. Переменные структуры и иерархии (13 колонок в памяти под финальную структуру A:M)
     Dim rowsColl As New Collection, lvl1Bounds As New Collection, lvl2Bounds As New Collection
     Dim alignLeftColl As New Collection, alignRightColl As New Collection
     Dim headerRowsDays As Object
     Set headerRowsDays = CreateObject("Scripting.Dictionary")
     
-    ' Точные трекеры строк на листе (с учетом 3-х строк будущей шапки)
+    ' Восстановление стабильных трекеров физических строк на листе
     Dim lvl1StartRows As Object, lvl1EndRows As Object
     Dim lvl2StartRows As Object, lvl2EndRows As Object
     Set lvl1StartRows = CreateObject("Scripting.Dictionary")
@@ -119,7 +121,7 @@ Sub AggregateDataWithDecadaAndSilent()
     Dim idx2 As Long: idx2 = 0
     Dim idx3 As Long: idx3 = 0
     
-    Dim currentSheetRow As Long: currentSheetRow = 3 ' Стартуем учет со строки после заголовков шапки
+    Dim currentSheetRow As Long: currentSheetRow = 3 ' Начинаем учет со строки под шапкой отчета
     
     For j = 1 To 13: emptyRow(j) = "": Next j
     
@@ -127,7 +129,7 @@ Sub AggregateDataWithDecadaAndSilent()
         idx1 = idx1 + 1
         idx2 = 0 
         
-        ' Пустая строка-разделитель
+        ' Пустая строка-разделитель блоков
         rowsColl.Add emptyRow
         currentSheetRow = currentSheetRow + 1
         
@@ -141,7 +143,7 @@ Sub AggregateDataWithDecadaAndSilent()
         headerIdx = rowsColl.Count
         alignLeftColl.Add headerIdx 
         
-        ' Фиксируем точную физическую строку Уровня 1 на листе
+        ' Фиксируем физическую строку начала Уровня 1
         lvl1StartRows(idx1) = currentSheetRow
         
         startLvl1 = rowsColl.Count + 1
@@ -190,13 +192,13 @@ Sub AggregateDataWithDecadaAndSilent()
                 endLvl1 = rowsColl.Count
                 alignRightColl.Add endLvl1 
                 
+                ' Фиксируем физическую строку начала Уровня 2
+                lvl2StartRows(idx1 & "_" & idx2) = currentSheetRow
+                
                 silKey = CleanString(CStr(decArr(j, 2)))
                 
                 ' Разворачивание Уровня 3 (Технологические карты SILENT_ENGINE)
                 If silDict.Exists(silKey) Then
-                    ' ИСПРАВЛЕНО: Фиксируем первую дочернюю строку СТРОГО перед заполнением 3-го уровня
-                    lvl2StartRows(idx1 & "_" & idx2) = currentSheetRow + 1
-                    
                     Set silRowsItems = silDict(silKey)
                     startLvl2 = rowsColl.Count + 1
                     
@@ -221,14 +223,14 @@ Sub AggregateDataWithDecadaAndSilent()
                         
                         If volDict.Exists(volKey) Then
                             matchVol = volDict(volKey)
-                            tempRow(3) = matchVol(1)  
-                            tempRow(4) = matchVol(0)  ' План
-                            tempRow(5) = matchVol(2)  ' Факт
+                            tempRow(3) = matchVol(1)  ' Ед.изм -> C
+                            tempRow(4) = matchVol(0)  ' План -> D
+                            tempRow(5) = matchVol(2)  ' Факт -> E
                             tempRow(6) = ""           
                             tempRow(7) = ""           
-                            tempRow(8) = matchVol(3)  ' Остаток объемов
-                            tempRow(12) = matchVol(4) 
-                            tempRow(13) = matchVol(5) 
+                            tempRow(8) = matchVol(3)  ' Остаток объемов -> H
+                            tempRow(12) = matchVol(4) ' Статус -> L
+                            tempRow(13) = matchVol(5) ' % готовности -> M
                         End If
                         
                         rowsColl.Add tempRow
@@ -239,17 +241,16 @@ Sub AggregateDataWithDecadaAndSilent()
                     Next itemIdx
                     
                     lvl2Bounds.Add Array(startLvl2, endLvl2)
-                    ' ИСПРАВЛЕНО: Фиксируем последнюю дочернюю строку СТРОГО на текущей позиции трекера
-                    lvl2EndRows(idx1 & "_" & idx2) = currentSheetRow
+                    ' Фиксируем физическую конечную строку Уровня 2
+                    lvl2EndRows(idx1 & "_" & idx2) = currentSheetRow - 1
                 Else
-                    ' Если дочерних карт 3-го уровня нет, зануляем маркеры для безопасности Части 4
                     lvl2StartRows(idx1 & "_" & idx2) = 0
                     lvl2EndRows(idx1 & "_" & idx2) = 0
                 End If
             End If
         Next j
         
-        lvl1EndRows(idx1) = currentSheetRow 
+        lvl1EndRows(idx1) = currentSheetRow - 1
         headerRowsDays(headerIdx) = totalDays
         
         If hasDates Then
@@ -265,7 +266,8 @@ Sub AggregateDataWithDecadaAndSilent()
             lvl1Bounds.Add Array(startLvl1, endLvl1)
         End If
     Next key
-    ' 6. Перенос коллекции в результирующий массив
+
+' 6. Перенос коллекции в результирующий массив
     Dim outArr() As Variant
     ReDim outArr(1 To rowsColl.Count, 1 To 13)
     For i = 1 To rowsColl.Count
@@ -329,18 +331,18 @@ Sub AggregateDataWithDecadaAndSilent()
     newWs.Rows(2).RowHeight = 22
     newWs.Rows(3).RowHeight = 22
     
-    ' Жесткая защита от запятых
+    ' Жесткая защита от запятых для столбца номеров
     newWs.Range("C4:C" & (rowsColl.Count + 3)).NumberFormat = "@"
     
-    ' Выгрузка данных
+    ' Выгрузка данных на лист
     newWs.Range("C4").Resize(rowsColl.Count, 13).Value = outArr
     
-    ' СДВИГ СТРУКТУРЫ ВЛЕВО
+    ' СДВИГ СТРУКТУРЫ ВЛЕВО (Столбец C становится столбцом A)
     newWs.Columns("A:B").Delete Shift:=xlToLeft
     newWs.Range("A4:A" & (rowsColl.Count + 3)).NumberFormat = "@"
     
-    Dim currRow As Long, dotsCount As Long, curKey As Variant
-    Dim subStart As Long, subEnd As Long
+    ' ИСПРАВЛЕНО СИНТАКСИЧЕСКИ: Добавлено пропущенное As Long
+    Dim currRow As Long, dotsCount As Long
     
     For i = 1 To rowsColl.Count
         currRow = i + 3
@@ -350,10 +352,6 @@ Sub AggregateDataWithDecadaAndSilent()
             
             ' Уровень 1: Luxury Deep Black
             If dotsCount = 0 Then
-                curKey = CLng(outArr(i, 1))
-                subStart = lvl1StartRows(curKey) + 1
-                subEnd = lvl1EndRows(curKey)
-                
                 With newWs.Range("A" & currRow & ":M" & currRow)
                     .Font.Name = "Times New Roman"
                     .Font.Bold = True
@@ -364,28 +362,8 @@ Sub AggregateDataWithDecadaAndSilent()
                 newWs.Rows(currRow).RowHeight = 50
                 newWs.Cells(currRow, "C").NumberFormat = "#,##0.00"
                 
-                If subEnd >= subStart Then
-                    newWs.Cells(currRow, "D").Formula = "=SUMIFS(D" & subStart & ":D" & subEnd & ",A" & subStart & ":A" & subEnd & ",""*.*"",A" & subStart & ":A" & subEnd & ",""<>*.*.*"")"
-                    newWs.Cells(currRow, "E").Formula = "=SUMIFS(E" & subStart & ":E" & subEnd & ",A" & subStart & ":A" & subEnd & ",""*.*"",A" & subStart & ":A" & subEnd & ",""<>*.*.*"")"
-                    newWs.Cells(currRow, "H").Formula = "=SUMIFS(H" & subStart & ":H" & subEnd & ",A" & subStart & ":A" & subEnd & ",""*.*"",A" & subStart & ":A" & subEnd & ",""<>*.*.*"")"
-                    newWs.Cells(currRow, "L").Formula = "=IF(COUNTIF(L" & subStart & ":L" & subEnd & ",""<>Работы не начаты"")>0,""Работы начались"",""Работы не начаты"")"
-                Else
-                    newWs.Cells(currRow, "D").Value = 0
-                    newWs.Cells(currRow, "E").Value = 0
-                    newWs.Cells(currRow, "H").Value = 0
-                    newWs.Cells(currRow, "L").Value = "Работы не начаты"
-                End If
-                
-                newWs.Cells(currRow, "F").Formula = "=D" & currRow & "-E" & currRow
-                newWs.Cells(currRow, "G").Formula = "=IF(D" & currRow & "=0,0,E" & currRow & "/D" & currRow & ")"
-                newWs.Cells(currRow, "M").Formula = "=IF(D" & currRow & "=0,0,E" & currRow & "/D" & currRow & ")"
-                
             ' Уровень 2: Slate Gray
             ElseIf dotsCount = 1 Then
-                curKey = outArr(i, 1)
-                subStart = lvl2StartRows(curKey)
-                subEnd = lvl2EndRows(curKey)
-                
                 With newWs.Range("A" & currRow & ":M" & currRow)
                     .Font.Name = "Times New Roman"
                     .Font.Bold = True
@@ -396,42 +374,111 @@ Sub AggregateDataWithDecadaAndSilent()
                 newWs.Rows(currRow).RowHeight = 50
                 newWs.Cells(currRow, "C").NumberFormat = "#,##0.00"
                 
-                ' ИСПРАВЛЕНО: Проверяем физический маркер наличия дочерних строк 3 уровня
-                If subStart > 0 And subEnd >= subStart Then
-                    newWs.Cells(currRow, "D").Formula = "=SUM(D" & subStart & ":D" & subEnd & ")"
-                    newWs.Cells(currRow, "E").Formula = "=SUM(E" & subStart & ":E" & subEnd & ")"
-                    newWs.Cells(currRow, "H").Formula = "=SUM(H" & subStart & ":H" & subEnd & ")"
-                    newWs.Cells(currRow, "L").Formula = "=IF(COUNTIF(L" & subStart & ":L" & subEnd & ",""<>Работы не начаты"")>0,""Работы начались"",""Работы не начаты"")"
-                Else
-                    ' Если технологических карт у работы нет, выводим 0 вместо битой формулы
-                    newWs.Cells(currRow, "D").Value = 0
-                    newWs.Cells(currRow, "E").Value = 0
-                    newWs.Cells(currRow, "H").Value = 0
-                    newWs.Cells(currRow, "L").Value = "Работы не начаты"
-                End If
-                
-                newWs.Cells(currRow, "F").Formula = "=D" & currRow & "-E" & currRow
-                newWs.Cells(currRow, "G").Formula = "=IF(D" & currRow & "=0,0,E" & currRow & "/D" & currRow & ")"
-                newWs.Cells(currRow, "M").Formula = "=IF(D" & currRow & "=0,0,E" & currRow & "/D" & currRow & ")"
-                
             ' Уровень 3: Технологические карты (Calibri Жирный)
             ElseIf dotsCount = 2 Then
-                newWs.Cells(currRow, "F").Formula = "=D" & currRow & "-E" & currRow
-                newWs.Cells(currRow, "G").Formula = "=IF(D" & currRow & "=0,0,E" & currRow & "/D" & currRow & ")"
-                newWs.Cells(currRow, "M").Formula = "=IF(D" & currRow & "=0,0,E" & currRow & "/D" & currRow & ")"
-                
                 With newWs.Range("A" & currRow & ":M" & currRow)
                     .Font.Name = "Calibri"
                     .Font.Bold = True
                     .Font.Color = RGB(0, 0, 0)
                     .VerticalAlignment = xlCenter
                 End With
-                
                 newWs.Cells(currRow, "C").NumberFormat = "@"
             End If
         End If
     Next i
+
+' =========================================================================
+    ' НОВАЯ НЕЗАВИСИМАЯ ОПЕРАЦИЯ: ВОСХОДЯЩЕЕ СКАНИРОВАНИЕ ЛИСТА ДЛЯ СБОРА УРОВНЯ 2
+    ' =========================================================================
+    Dim lastSheetRow As Long
+    lastSheetRow = newWs.Cells(newWs.Rows.Count, "A").End(xlUp).Row
+    
+    Dim r As Long, checkDots As Long, levelStr As String
+    Dim childStart As Long, childEnd As Long
+    Dim curKey As Variant, subStart As Long, subEnd As Long
+    
+    ' Сначала размораживаем движок Excel, чтобы формулы оживали на лету
+    Application.Calculation = xlCalculationAutomatic
+    
+    ' Сканируем лист снизу вверх от последней строки данных до первой строки данных (4)
+    For r = lastSheetRow To 4 Step -1
+        levelStr = CStr(newWs.Cells(r, "A").Value)
+        If levelStr <> "" Then
+            checkDots = UBound(Split(levelStr, "."))
+            
+            ' Уровень 3: Фиксируем границы дочерних строк
+            If checkDots = 2 Then
+                If childEnd = 0 Then childEnd = r
+                childStart = r
+                
+                ' Прописываем базовые формулы Уровня 3 (Дельта, % откл, % готовности)
+                newWs.Cells(r, "F").Formula = "=D" & r & "-E" & r
+                newWs.Cells(r, "G").Formula = "=IF(D" & r & "=0,0,E" & r & "/D" & r & ")"
+                newWs.Cells(r, "M").Formula = "=IF(D" & r & "=0,0,E" & r & "/D" & r & ")"
+                
+            ' Уровень 2: Навешиваем живые формулы SUM по зафиксированным границам
+            ElseIf checkDots = 1 Then
+                If childStart > 0 And childEnd >= childStart Then
+                    ' Пакетно прописываем формулы суммирования дочернего Уровня 3
+                    newWs.Cells(r, "D").Formula = "=SUM(D" & childStart & ":D" & childEnd & ")"
+                    newWs.Cells(r, "E").Formula = "=SUM(E" & childStart & ":E" & childEnd & ")"
+                    newWs.Cells(r, "H").Formula = "=SUM(H" & childStart & ":H" & childEnd & ")"
+                Else
+                    ' Если технологических карт у работы нет — выводим пустые кавычки для чистоты
+                    newWs.Cells(r, "D").Value = ""
+                    newWs.Cells(r, "E").Value = ""
+                    newWs.Cells(r, "H").Value = ""
+                End If
+                
+                ' Формулы Дельты и Процентов Уровня 2
+                newWs.Cells(r, "F").Formula = "=D" & r & "-E" & r
+                newWs.Cells(r, "G").Formula = "=IF(D" & r & "=0,0,E" & r & "/D" & r & ")"
+                newWs.Cells(r, "M").Formula = "=IF(D" & r & "=0,0,E" & r & "/D" & r & ")"
+                
+                ' Сбрасываем маркеры дочернего блока для следующей подгруппы Уровня 2
+                childStart = 0
+                childEnd = 0
+                
+            ' Уровень 1: Сбрасываем маркеры дочернего блока (Уровень 1 собирает данные через SUMIFS независимо)
+            ElseIf checkDots = 0 Then
+                childStart = 0
+                childEnd = 0
+            End If
+        End If
+    Next r
+    
+    ' ВТОРОЙ БЫСТРЫЙ ПРОХОД: Навешиваем формулы и статусы для Уровня 1
+    For r = 4 To lastSheetRow
+        levelStr = CStr(newWs.Cells(r, "A").Value)
+        If levelStr <> "" Then
+            checkDots = UBound(Split(levelStr, "."))
+            
+            If checkDots = 0 Then
+                curKey = CLng(levelStr)
+                subStart = lvl1StartRows(curKey) + 1
+                subEnd = lvl1EndRows(curKey)
+                
+                If subEnd >= subStart Then
+                    newWs.Cells(r, "D").Formula = "=SUMIFS(D" & subStart & ":D" & subEnd & ",A" & subStart & ":A" & subEnd & ",""*.*"",A" & subStart & ":A" & subEnd & ",""<>*.*.*"")"
+                    newWs.Cells(r, "E").Formula = "=SUMIFS(E" & subStart & ":E" & subEnd & ",A" & subStart & ":A" & subEnd & ",""*.*"",A" & subStart & ":A" & subEnd & ",""<>*.*.*"")"
+                    newWs.Cells(r, "H").Formula = "=SUMIFS(H" & subStart & ":H" & subEnd & ",A" & subStart & ":A" & subEnd & ",""*.*"",A" & subStart & ":A" & subEnd & ",""<>*.*.*"")"
+                    newWs.Cells(r, "L").Formula = "=IF(COUNTIF(L" & subStart & ":L" & subEnd & ",""<>Работы не начаты"")>0,""Работы начались"",""Работы не начаты"")"
+                Else
+                    newWs.Cells(r, "D").Value = ""
+                    newWs.Cells(r, "E").Value = ""
+                    newWs.Cells(r, "H").Value = ""
+                    newWs.Cells(r, "L").Value = "Работы не начаты"
+                End If
+                
+                newWs.Cells(r, "F").Formula = "=D" & r & "-E" & r
+                newWs.Cells(r, "G").Formula = "=IF(D" & r & "=0,0,E" & r & "/D" & r & ")"
+                newWs.Cells(r, "M").Formula = "=IF(D" & r & "=0,0,E" & r & "/D" & r & ")"
+            End If
+        End If
+    Next r
+    
     ' Построение структуры группировок (+3 к смещению шапки)
+    Dim bound As Variant
     For Each bound In lvl2Bounds: newWs.Rows((bound(0) + 3) & ":" & (bound(1) + 3)).Group: Next bound
     For Each bound In lvl1Bounds: newWs.Rows((bound(0) + 3) & ":" & (bound(1) + 3)).Group: Next bound
     
@@ -446,7 +493,6 @@ Sub AggregateDataWithDecadaAndSilent()
     End With
     
     ' Построчное выравнивание номеров в столбце А
-    Dim rowIdx As Variant
     For Each rowIdx In alignLeftColl: newWs.Cells(rowIdx + 3, "A").HorizontalAlignment = xlLeft: Next rowIdx
     For Each rowIdx In alignRightColl: newWs.Cells(rowIdx + 3, "A").HorizontalAlignment = xlRight: Next rowIdx
     
@@ -455,7 +501,7 @@ Sub AggregateDataWithDecadaAndSilent()
     
     ' ПРИНУДИТЕЛЬНЫЕ ГАБАРИТЫ И ЦЕНТРИРОВАНИЕ ПО ТЗ
     newWs.Columns("B:B").ColumnWidth = 60
-    newWs.Range("B4:B" & (rowsColl.Count + 3)).WrapText = True ' Автоперенос наименований работ
+    newWs.Range("B4:B" & (rowsColl.Count + 3)).WrapText = True
     
     ' Полная центровка для блоков данных со столбца C по М
     With newWs.Range("C4:M" & (rowsColl.Count + 3))
@@ -472,14 +518,12 @@ Sub AggregateDataWithDecadaAndSilent()
     newWs.Range("L4:L" & (rowsColl.Count + 3)).NumberFormat = "@"
     newWs.Range("M4:M" & (rowsColl.Count + 3)).NumberFormat = "0.00%"
     
-    ' =========================================================================
-    ' ДОБАВЛЕНИЕ ИНДИКАТОРА ПРОГРЕССА «БАТАРЕЙКА» (Условное форматирование DataBars)
-    ' =========================================================================
+    ' ИНДИКАТОРА ПРОГРЕССА «БАТАРЕЙКА» (Условное форматирование DataBars)
     Dim progressRange As Range
     Set progressRange = newWs.Range("M4:M" & (rowsColl.Count + 3))
     
     Dim db As DataBar
-    progressRange.FormatConditions.Delete ' Очистка старых правил
+    progressRange.FormatConditions.Delete
     Set db = progressRange.FormatConditions.AddDatabar
     
     With db
@@ -488,7 +532,7 @@ Sub AggregateDataWithDecadaAndSilent()
         .BarColor.Color = RGB(160, 185, 205) ' Премиальный стальной серо-голубой цвет шкалы
         .PercentMin = 0
         .PercentMax = 100
-        .ShowValue = True ' Сохраняем отображение цифр процентов поверх заливки
+        .ShowValue = True
     End With
     
     newWs.Columns("A:A").AutoFit
@@ -496,10 +540,10 @@ Sub AggregateDataWithDecadaAndSilent()
 
 SpeedupExit:
     ' =========================================================================
-    ' ВОССТАНОВЛЕНИЕ ИСХОДНЫХ НАСТРОЕК EXCEL ПОСЛЕ УСКОРЕНИЯ И ПЕРЕСЧЕТ КНИГИ
+    ' ВОССТАНОВЛЕНИЕ ИСХОДНЫХ НАСТРОЕК EXCEL ПОСЛЕ УСКОРЕНИЯ
     ' =========================================================================
     Application.Calculation = oldCalc
-    Application.Calculate ' Принудительно заставляем Excel оживить все SUM и SUMIFS
+    Application.Calculate ' Финальный тотальный пересчет
     Application.ScreenUpdating = True
     Application.DisplayAlerts = True
     Application.EnableEvents = True
