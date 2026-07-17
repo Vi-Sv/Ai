@@ -116,7 +116,7 @@ Sub AggregateDataWithDecadaAndSilent()
     
     ' Счетчики уровней иерархии
     Dim idx1 As Long: idx1 = 0
-    Dim idx2 Rely На Long: idx2 = 0
+    Dim idx2 As Long: idx2 = 0
     Dim idx3 As Long: idx3 = 0
     
     Dim currentSheetRow As Long: currentSheetRow = 3 ' Стартуем учет со строки после заголовков шапки
