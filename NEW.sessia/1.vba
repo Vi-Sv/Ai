@@ -327,12 +327,17 @@ Sub AggregateDataWithDecadaAndSilent()
                 
                 newWs.Cells(r, "F").Formula = "=D" & r & "-E" & r
                 newWs.Cells(r, "G").Formula = "=IF(D" & r & "=0,0,E" & r & "/D" & r & ")"
+                
+                ' ИСПРАВЛЕНИЕ: Внедрение динамической формулы расчета остатка объемов (План - Факт)
+                newWs.Cells(r, "H").Formula = "=D" & r & "-E" & r
+                
                 newWs.Cells(r, "J").Formula = "=IF(D" & r & "=0,0,E" & r & "/D" & r & ")"
                 
-                ' ИСПРАВЛЕНИЕ: Прямая текстовая замена пустых значений средствами VBA без циклических формул
                 If Trim(CStr(newWs.Cells(r, "I").Value)) = "" Or Trim(CStr(newWs.Cells(r, "I").Value)) = "0" Then
                     newWs.Cells(r, "I").Value = "Работы не начаты"
                 End If
+
+
 
                 
             ' Уровень 2: Детали DECADA
