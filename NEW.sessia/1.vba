@@ -327,10 +327,17 @@ Sub AggregateDataWithDecadaAndSilent()
                 
                 newWs.Cells(r, "F").Formula = "=D" & r & "-E" & r
                 newWs.Cells(r, "G").Formula = "=IF(D" & r & "=0,0,E" & r & "/D" & r & ")"
+                
+                ' ИСПРАВЛЕНИЕ: Внедрение динамической формулы расчета остатка объемов (План - Факт)
+                newWs.Cells(r, "H").Formula = "=D" & r & "-E" & r
+                
                 newWs.Cells(r, "J").Formula = "=IF(D" & r & "=0,0,E" & r & "/D" & r & ")"
                 
-                ' Корректировка статуса для пустых ячеек
-                newWs.Cells(r, "I").Value = "=IF(TRIM(I" & r & ")="""",""Работы не начаты"",I" & r & ")"
+                If Trim(CStr(newWs.Cells(r, "I").Value)) = "" Or Trim(CStr(newWs.Cells(r, "I").Value)) = "0" Then
+                    newWs.Cells(r, "I").Value = "Работы не начаты"
+                End If
+
+
                 
             ' Уровень 2: Детали DECADA
             ElseIf checkDots = 1 Then
@@ -376,30 +383,29 @@ Sub AggregateDataWithDecadaAndSilent()
                 subStart = lvl1StartRows(curKey) + 1
                 subEnd = lvl1EndRows(curKey)
                 
-                ' По требованию 1: Для Уровня 1 в графах D, E, F, G оставляем ячейки пустыми
+                ' ИСПРАВЛЕНИЕ: Полное зануление/очистка граф D, E, F, G, H для Уровня 1
                 newWs.Cells(r, "D").Value = ""
                 newWs.Cells(r, "E").Value = ""
                 newWs.Cells(r, "F").Value = ""
                 newWs.Cells(r, "G").Value = ""
+                newWs.Cells(r, "H").Value = ""
                 
                 If subEnd >= subStart Then
-                    ' Сбор остатка объемов
-                    newWs.Cells(r, "H").Formula = "=SUMIFS(H" & subStart & ":H" & subEnd & ",A" & subStart & ":A" & subEnd & ",""*.*"",A" & subStart & ":A" & subEnd & ",""<>*.*.*"")"
-                    
-                    ' По требованию 3: Статус Уровня 1 с жестким исключением пустых строк и проверкой реального статуса "В процессе" или "Завершен" нижестоящих
+                    ' Расчет статуса Уровня 1 на основании дочерних строк Уровня 2
                     newWs.Cells(r, "I").Formula = "=IF(COUNTIF(I" & subStart & ":I" & subEnd & ",""Работы в процессе"")>0,""Работы в процессе""," & _
                                                   "IF(COUNTIF(I" & subStart & ":I" & subEnd & ",""Работы завершены"")=COUNTIF(A" & subStart & ":A" & subEnd & ",""*.*""),""Работы завершены"",""Работы не начаты""))"
                     
-                    ' По требованию 4: Средний процент готовности Уровня 1 на основании процентов ниже (Уровень 2)
+                    ' Расчет среднего процента готовности Уровня 1 на основании дочерних строк Уровня 2
                     newWs.Cells(r, "J").Formula = "=AVERAGEIFS(J" & subStart & ":J" & subEnd & ",A" & subStart & ":A" & subEnd & ",""*.*"",A" & subStart & ":A" & subEnd & ",""<>*.*.*"")"
                 Else
-                    newWs.Cells(r, "H").Value = ""
                     newWs.Cells(r, "I").Value = "Работы не начаты"
                     newWs.Cells(r, "J").Value = 0
                 End If
             End If
         End If
     Next r
+
+
     ' 8. Построение структуры группировок
     Dim bound As Variant
     For Each bound In lvl2Bounds: newWs.Rows((bound(0) + 3) & ":" & (bound(1) + 3)).Group: Next bound
