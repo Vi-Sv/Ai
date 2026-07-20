@@ -16,7 +16,6 @@ Sub BuildHierarchyTree()
         Exit Sub
     End If
     
-    ' Считываем диапазон от A до M (столбец N исключен)
     srcData = wsSource.Range("A1:M" & lastRow).Value
     
     Set wbNew = Workbooks.Add(xlWBATWorksheet)
@@ -24,7 +23,7 @@ Sub BuildHierarchyTree()
     
     Set dictL1 = CreateObject("Scripting.Dictionary")
 
-' БЛОК 2 ИЗ 4: ПОСТРОЕНИЕ ИЕРАРХИЧЕСКОЙ СТРУКТУРЫ И СБОР ОГРАНИЧЕННЫХ ДАННЫХ В ПАМЯТИ
+' БЛОК 2 ИЗ 4: ПОСТРОЕНИЕ ИЕРАРХИЧЕСКОЙ СТРУКТУРЫ И СБОР ДАННЫХ В ПАМЯТИ
     Dim valL1 As Variant, valL2 As Variant, valL3 As Variant
     Dim dictL2 As Object, dictL3 As Object
     Dim extraData(1 To 4) As Variant
@@ -35,22 +34,18 @@ Sub BuildHierarchyTree()
         valL3 = srcData(i, 8)  ' Столбец H (Уровень 3)
         
         If Not IsEmpty(valL1) And valL1 <> "" Then
-            ' Создание или получение словаря Уровня 2 для текущего Уровня 1
             If Not dictL1.Exists(valL1) Then
                 Set dictL1(valL1) = CreateObject("Scripting.Dictionary")
             End If
             Set dictL2 = dictL1(valL1)
             
             If Not IsEmpty(valL2) And valL2 <> "" Then
-                ' Создание или получение словаря Уровня 3 для текущего Уровня 2
                 If Not dictL2.Exists(valL2) Then
                     Set dictL2(valL2) = CreateObject("Scripting.Dictionary")
                 End If
                 Set dictL3 = dictL2(valL2)
                 
-                ' Добавление значения Уровня 3 и его сопутствующих данных A, L, K, M (N полностью исключен)
                 If Not IsEmpty(valL3) And valL3 <> "" Then
-                    ' Массив: (1)=A, (2)=L->E, (3)=K->F, (4)=M->G
                     extraData(1) = srcData(i, 1)  ' Столбец A
                     extraData(2) = srcData(i, 12) ' Столбец L
                     extraData(3) = srcData(i, 11) ' Столбец K
@@ -61,33 +56,54 @@ Sub BuildHierarchyTree()
             End If
         End If
     Next i
-
-' БЛОК 3 ИЗ 4: ЗАПИСЬ СФОРМИРОВАННОЙ СТРУКТУРЫ НА ЛИСТ (СТОЛБЦЫ A, D, E, F, G)
+' БЛОК 3 ИЗ 4: ЗАПИСЬ ШАПКИ ВО 2-Ю СТРОКУ, ВЫГРУЗКА И ЦВЕТОВОЕ ОФОРМЛЕНИЕ УРОВНЕЙ
     Dim k1 As Variant, k2 As Variant, k3 As Variant
     Dim outRow As Long, startL3 As Long
     Dim currentExtra As Variant
+    Dim rngL1 As Range, rngL2 As Range
     
-    outRow = 2 ' Данные Уровня 1 начинаются со строки 2 в графе D
+    ' Запись названий колонок во вторую строку по ТЗ
+    wsNew.Cells(2, 3).Value = "№ п.п."
+    wsNew.Cells(2, 4).Value = "Объект"
+    wsNew.Cells(2, 5).Value = "Ед. изм."
+    wsNew.Cells(2, 6).Value = "Исх. объем"
+    wsNew.Cells(2, 7).Value = "Норма на ед."
+    
+    outRow = 3 ' Данные Уровня 1 теперь начинаются со строки 3 в графе D
     
     Application.ScreenUpdating = False
     wsNew.Outline.SummaryRow = xlSummaryAbove
     
-    ' Обход дерева в памяти и построчная выгрузка значений
+    ' Обход дерева в памяти и построчная выгрузка с динамическим форматированием
     For Each k1 In dictL1.Keys
         wsNew.Cells(outRow, 4).Value = k1 ' Графа D (Уровень 1)
+        
+        ' Форматирование Уровня 1: Высота 30, Темно-серый фон (Hex #3A3A3A), Белый текст
+        wsNew.Rows(outRow).RowHeight = 30
+        Set rngL1 = wsNew.Range(wsNew.Cells(outRow, 3), wsNew.Cells(outRow, 7))
+        rngL1.Interior.Color = RGB(58, 58, 58)
+        rngL1.Font.Color = RGB(255, 255, 255)
+        rngL1.Font.Bold = True
+        
         outRow = outRow + 1
         
         Set dictL2 = dictL1(k1)
         For Each k2 In dictL2.Keys
             startL3 = outRow
             wsNew.Cells(outRow, 4).Value = k2 ' Графа D (Уровень 2) строго под Уровнем 1
+            
+            ' Форматирование Уровня 2: Светло-серый фон (Hex #7A7A7A), Белый текст
+            Set rngL2 = wsNew.Range(wsNew.Cells(outRow, 3), wsNew.Cells(outRow, 7))
+            rngL2.Interior.Color = RGB(122, 122, 122)
+            rngL2.Font.Color = RGB(255, 255, 255)
+            
             outRow = outRow + 1
             
             Set dictL3 = dictL2(k2)
             For Each k3 In dictL3.Keys
                 wsNew.Cells(outRow, 4).Value = k3 ' Графа D (Уровень 3) строго под Уровнем 2
                 
-                ' Извлечение и запись сопутствующих данных для Уровня 3 (без столбца N)
+                ' Извлечение и запись сопутствующих данных для Уровня 3
                 currentExtra = dictL3(k3)
                 wsNew.Cells(outRow, 1).Value = currentExtra(1) ' Графа A (из A)
                 wsNew.Cells(outRow, 5).Value = currentExtra(2) ' Графа E (из L)
@@ -106,14 +122,14 @@ Sub BuildHierarchyTree()
         ' Вставка пустой строки после завершения формирования всей группы 1-го уровня
         outRow = outRow + 1
     Next k1
-' БЛОК 4 ИЗ 4: ВНЕШНЯЯ ГРУППИРОВКА, ОПТИМИЗИРОВАННОЕ ФОРМАТИРОВАНИЕ И СХЛОПЫВАНИЕ
+' БЛОК 4 ИЗ 4: ВНЕШНЯЯ ГРУППИРОВКА, НАСТРОЙКА ВЫРАВНИВАНИЯ СТОЛБЦОВ И ШАПКИ, СХЛОПЫВАНИЕ
     Dim totalRows As Long, currentGroupStart As Long
     
     totalRows = wsNew.Cells(wsNew.Rows.Count, 4).End(xlUp).Row
-    currentGroupStart = 2
+    currentGroupStart = 3
     
     ' Динамическое определение внешних границ групп по пустым строкам
-    For i = 2 To totalRows + 1
+    For i = 3 To totalRows + 1
         If wsNew.Cells(i, 4).Value = "" Or i > totalRows Then
             If i - 1 > currentGroupStart Then
                 ' Группируем элементы уровня 2 и 3 под заголовком уровня 1
@@ -123,23 +139,47 @@ Sub BuildHierarchyTree()
         End If
     Next i
     
-    ' Форматирование столбца D (Ширина 48, перенос текста)
+    ' Настройка шапки во 2-й строке (Строго по ТЗ: Центрирование по горизонтали/вертикали + перенос текста)
+    With wsNew.Range("C2:G2")
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+        .WrapText = True
+        .Font.Bold = True
+    End With
+    wsNew.Rows(2).RowHeight = 25
+    
+    ' Форматирование столбца А (Ширина 10, Центрирование по горизонтали/вертикали + перенос текста)
+    With wsNew.Columns("A")
+        .ColumnWidth = 10
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+        .WrapText = True
+    End With
+    
+    ' Форматирование столбца D (Ширина 48, Перенос текста)
     With wsNew.Columns("D")
         .ColumnWidth = 48
         .WrapText = True
     End With
     
-    ' Форматирование столбцов F и G (Ширина 9, числовой формат с 2 нулями, столбец H исключен)
+    ' Форматирование столбцов E, F, G (Ширина 9 для F:G, Центрирование для E:G, Числовой формат с 2 нулями для F:G)
+    With wsNew.Columns("E")
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+    End With
+    
     With wsNew.Range("F:G")
         .ColumnWidth = 9
         .NumberFormat = "0.00"
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
     End With
     
-    ' Настройка корректного пошагового скрытия (изоляция уровней при раскрытии)
+    ' Пошаговое скрытие для обеспечения независимого раскрытия групп при нажатии на [+]
     wsNew.Outline.ShowLevels RowLevels:=2
     wsNew.Outline.ShowLevels RowLevels:=1
     
     Application.ScreenUpdating = True
-    MsgBox "Многоуровневая структура успешно создана. Данные выведены в графы A, D, E, F, G.", vbInformation
+    MsgBox "Структурированный лист с новым визуальным оформлением готов.", vbInformation
 End Sub
 
