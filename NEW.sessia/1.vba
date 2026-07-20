@@ -301,8 +301,8 @@ Sub AggregateDataWithDecadaAndSilent()
             End If
         End If
     Next i
-    ' =========================================================================
-    ' ЖЕСТКИЙ ДВУХПРОХОДНОЙ РАСЧЕТ И ИСПРАВЛЕННАЯ ЛОГИКА СТАТУСОВ/ФОРМУЛ
+       ' =========================================================================
+    ' ИСПРАВЛЕННЫЙ БЛОК 5 И 6: ПОЛНЫЙ ДВУХПРОХОДНОЙ РАСЧЕТ И СБОРКА СТРУКТУРЫ
     ' =========================================================================
     Dim lastSheetRow As Long
     lastSheetRow = newWs.Cells(newWs.Rows.Count, "A").End(xlUp).Row
@@ -311,13 +311,17 @@ Sub AggregateDataWithDecadaAndSilent()
     Dim childStart As Long, childEnd As Long
     Dim curKey As Variant, subStart As Long, subEnd As Long
     
-    ' КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Расчеты остаются отключенными во время записи формул
+    Application.Calculation = xlCalculationManual
     
-    ' Первый проход: Снизу вверх. Расчет Уровней 3 и 2. Столбцы сместились на -3 (D=A, E=B, F=C, G=D, H=E, I=F, J=G, K=H, L=I, M=J)
+    ' Первый проход: Снизу вверх. Расчет Уровней 3 и 2.
     ' A-№, B-Шифр, C-Трудозатраты, D-План, E-Факт, F-Дельта, G-% откл, H-Остаток, I-Статус, J-% готовности
     For r = lastSheetRow To 4 Step -1
         levelStr = CStr(newWs.Cells(r, "A").Value)
-        If levelStr <> "" Then
+        
+        ' Принудительное сжатие пустых строк-разделителей
+        If levelStr = "" Then
+            newWs.Rows(r).RowHeight = 5
+        Else
             checkDots = UBound(Split(levelStr, "."))
             
             ' Уровень 3: Технологические карты
@@ -327,17 +331,13 @@ Sub AggregateDataWithDecadaAndSilent()
                 
                 newWs.Cells(r, "F").Formula = "=D" & r & "-E" & r
                 newWs.Cells(r, "G").Formula = "=IF(D" & r & "=0,0,E" & r & "/D" & r & ")"
-                
-                ' ИСПРАВЛЕНИЕ: Внедрение динамической формулы расчета остатка объемов (План - Факт)
                 newWs.Cells(r, "H").Formula = "=D" & r & "-E" & r
-                
                 newWs.Cells(r, "J").Formula = "=IF(D" & r & "=0,0,E" & r & "/D" & r & ")"
                 
+                ' Проверка пустоты статуса на Уровне 3
                 If Trim(CStr(newWs.Cells(r, "I").Value)) = "" Or Trim(CStr(newWs.Cells(r, "I").Value)) = "0" Then
                     newWs.Cells(r, "I").Value = "Работы не начаты"
                 End If
-
-
                 
             ' Уровень 2: Детали DECADA
             ElseIf checkDots = 1 Then
@@ -346,10 +346,8 @@ Sub AggregateDataWithDecadaAndSilent()
                     newWs.Cells(r, "E").Formula = "=SUM(E" & childStart & ":E" & childEnd & ")"
                     newWs.Cells(r, "H").Formula = "=SUM(H" & childStart & ":H" & childEnd & ")"
                     
-                    ' Статус Уровня 2 на основе Уровня 3 (Исключение ложных срабатываний пустых строк)
                     newWs.Cells(r, "I").Formula = "=IF(COUNTIF(I" & childStart & ":I" & childEnd & ",""Работы в процессе"")>0,""Работы в процессе""," & _
                                                   "IF(COUNTIF(I" & childStart & ":I" & childEnd & ",""Работы завершены"")=COUNTIF(A" & childStart & ":A" & childEnd & ",""*.*.*""),""Работы завершены"",""Работы не начаты""))"
-                    ' Процент готовности Уровня 2 на базе Уровня 3 горизонтально (так как объемы агрегированы)
                     newWs.Cells(r, "J").Formula = "=IF(D" & r & "=0,0,E" & r & "/D" & r & ")"
                 Else
                     newWs.Cells(r, "D").Value = ""
@@ -372,18 +370,18 @@ Sub AggregateDataWithDecadaAndSilent()
         End If
     Next r
     
-    ' Второй проход: Сверху вниз. Расчет Уровня 1.
+    ' Второй проход: Сверху вниз. Расчет Уровня 1 и динамическая подмена статуса по процентам и перерасходу
     For r = 4 To lastSheetRow
         levelStr = CStr(newWs.Cells(r, "A").Value)
         If levelStr <> "" Then
             checkDots = UBound(Split(levelStr, "."))
             
+            ' Расчет для Уровня 1 (Уровень 1 проверяет перерасход по дочерним строкам Уровня 2)
             If checkDots = 0 Then
                 curKey = CLng(levelStr)
                 subStart = lvl1StartRows(curKey) + 1
                 subEnd = lvl1EndRows(curKey)
                 
-                ' ИСПРАВЛЕНИЕ: Полное зануление/очистка граф D, E, F, G, H для Уровня 1
                 newWs.Cells(r, "D").Value = ""
                 newWs.Cells(r, "E").Value = ""
                 newWs.Cells(r, "F").Value = ""
@@ -391,22 +389,30 @@ Sub AggregateDataWithDecadaAndSilent()
                 newWs.Cells(r, "H").Value = ""
                 
                 If subEnd >= subStart Then
-                    ' Расчет статуса Уровня 1 на основании дочерних строк Уровня 2
-                    newWs.Cells(r, "I").Formula = "=IF(COUNTIF(I" & subStart & ":I" & subEnd & ",""Работы в процессе"")>0,""Работы в процессе""," & _
-                                                  "IF(COUNTIF(I" & subStart & ":I" & subEnd & ",""Работы завершены"")=COUNTIF(A" & subStart & ":A" & subEnd & ",""*.*""),""Работы завершены"",""Работы не начаты""))"
-                    
-                    ' Расчет среднего процента готовности Уровня 1 на основании дочерних строк Уровня 2
                     newWs.Cells(r, "J").Formula = "=AVERAGEIFS(J" & subStart & ":J" & subEnd & ",A" & subStart & ":A" & subEnd & ",""*.*"",A" & subStart & ":A" & subEnd & ",""<>*.*.*"")"
+                    newWs.Cells(r, "I").Formula = "=IF(COUNTIF(I" & subStart & ":I" & subEnd & ",""не по плану"")>0,""не по плану"",IF(J" & r & ">0,""Ведутся работы"",IF(COUNTIF(I" & subStart & ":I" & subEnd & ",""Работы завершены"")=COUNTIF(A" & subStart & ":A" & subEnd & ",""*.*""),""Работы завершены"",""Работы не начаты"")))"
                 Else
                     newWs.Cells(r, "I").Value = "Работы не начаты"
                     newWs.Cells(r, "J").Value = 0
                 End If
+                
+            ' Корректировка статуса Уровня 2 (План в D, Факт в E)
+            ElseIf checkDots = 1 Then
+                If newWs.Cells(r, "D").Formula <> "" Then
+                    newWs.Cells(r, "I").Formula = "=IF(AND(ISNUMBER(D" & r & "),ISNUMBER(E" & r & "),E" & r & ">D" & r & "),""не по плану"",IF(J" & r & ">0,""Ведутся работы"",IF(COUNTIF(I" & (r + 1) & ":I" & (r + 1) & ",""Работы завершены"")>0,""Работы завершены"",""Работы не начаты"")))"
+                End If
+                
+            ' Корректировка статуса Уровня 3 (План в D, Факт в E)
+            ElseIf checkDots = 2 Then
+                newWs.Cells(r, "I").Formula = "=IF(AND(ISNUMBER(D" & r & "),ISNUMBER(E" & r & "),E" & r & ">D" & r & "),""не по плану"",IF(J" & r & ">0,""Ведутся работы"",IF(TRIM(I" & r & ")="""",""Работы не начаты"",I" & r & ")))"
             End If
         End If
     Next r
 
 
-    ' 8. Построение структуры группировок
+
+
+    ' 8. Построение структуры группировок (Блок 6)
     Dim bound As Variant
     For Each bound In lvl2Bounds: newWs.Rows((bound(0) + 3) & ":" & (bound(1) + 3)).Group: Next bound
     For Each bound In lvl1Bounds: newWs.Rows((bound(0) + 3) & ":" & (bound(1) + 3)).Group: Next bound
@@ -443,6 +449,10 @@ Sub AggregateDataWithDecadaAndSilent()
     newWs.Range("I4:I" & (rowsColl.Count + 3)).NumberFormat = "@"
     newWs.Range("J4:J" & (rowsColl.Count + 3)).NumberFormat = "0.00%"
     
+    ' Изменение высоты строк шапки
+    newWs.Rows(2).RowHeight = 35
+    newWs.Rows(3).RowHeight = 22
+    
     ' Наложение индикатора прогресса «Батарейка»
     Dim progressRange As Range
     Set progressRange = newWs.Range("J4:J" & (rowsColl.Count + 3))
@@ -462,6 +472,9 @@ Sub AggregateDataWithDecadaAndSilent()
     
     newWs.Columns("A:A").AutoFit
     newWs.Columns("C:J").AutoFit
+
+    ' По требованию: установка фиксированной ширины столбцов D, E, F, G равной 10
+    newWs.Columns("D:G").ColumnWidth = 10
 
 SpeedupExit:
     Application.Calculation = oldCalc
