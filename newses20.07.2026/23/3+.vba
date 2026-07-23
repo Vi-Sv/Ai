@@ -412,12 +412,22 @@ Sub BuildHierarchyTree()
                     ' Графа J (10) — фактические затраты ч/ч подгруппы
                     wsNew.Cells(outRow, 10).Value = metaL2("Spent")
                     
-                    ' Сопоставление с листом DECADA только для Уровня 2
+                                        ' Сопоставление с листом DECADA только для Уровня 2
                     matchKey = Trim(LCase(CStr(k2)))
                     If dictDecada.Exists(matchKey) Then
                         wsNew.Cells(outRow, 2).Value = dictDecada(matchKey)
                     End If
 
+                    ' Вычисление процента готовности подгруппы (L2) через ВЕСА трудозатрат ч/ч
+                    If metaL2("TargetHours") > 0 Then
+                        pL2 = metaL2("DoneHours") / metaL2("TargetHours")
+                        If pL2 > 1# Then pL2 = 1#
+                        ' ИСПРАВЛЕНИЕ: Переносим запись процента со столбца 13 строго в столбец 14 (N)
+                        wsNew.Cells(outRow, 14).Value = pL2
+                    Else
+                        ' ИСПРАВЛЕНИЕ: Переносим запись процента со столбца 13 строго в столбец 14 (N)
+                        wsNew.Cells(outRow, 14).Value = 0#
+                    End If
                     
                     If metaL2("StartDate") <> 0 Then wsNew.Cells(outRow, 12).Value = metaL2("StartDate")
                     If metaL2("EndDate") <> 0 Then wsNew.Cells(outRow, 13).Value = metaL2("EndDate")
@@ -432,6 +442,7 @@ Sub BuildHierarchyTree()
                     ' ВЫГРУЗКА УРОВНЯ 3 (Элементы подгруппы) — РОТАЦИЯ И ЗАКРЫТИЕ БРЕШИ
                     ' ==========================================================================
                     For Each kVol In subDictL3.Keys
+
                         idxL3 = idxL3 + 1
                         currentExtra = subDictL3(kVol)
                         
